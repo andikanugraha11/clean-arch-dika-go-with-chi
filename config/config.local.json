@@ -1,0 +1,23 @@
+{
+  "host": {
+    "address": "localhost",
+    "port": 7777
+  },
+  "db": {
+    "master" : {
+      "host": "127.0.0.1",
+      "port": 5432,
+      "user": "postgres",
+      "name": "archi_db",
+      "pass": "detikcom",
+      "conn": 20
+    },
+    "slave": {
+      "host": "127.0.0.1",
+      "port": 5432,
+      "user": "user_db",
+      "name": "test_db",
+      "conn": 20
+    }
+  }
+}
