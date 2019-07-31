@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/go-chi/valve"
 	"github.com/spf13/viper"
 	"gitlab-ci.detik.com/datacore/gonotifikasi/models"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -58,10 +63,53 @@ func main()  {
 		w.Write([]byte("hi"))
 	})
 
-	srv := http.Server{Addr: fmt.Sprintf(":%d", hostPort)}
+	// signaling
+	valv := valve.New()
+	baseCtx := valv.Context()
+
+	srv := http.Server{
+		Addr: fmt.Sprintf(":%d", hostPort),
+		Handler: chi.ServerBaseContext(baseCtx, r),
+	}
+
+	go func() {
+		sigint := make(chan os.Signal, 1)
+
+		// interrupt signal sent from terminal
+		signal.Notify(sigint, os.Interrupt)
+		// sigterm signal sent from kubernetes
+		signal.Notify(sigint, syscall.SIGTERM)
+
+		for range sigint{
+			log.Println("Server is shutdown...please wait...")
+
+			// first valv
+			valv.Shutdown(20 * time.Second)
+
+			// create context with timeout
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+
+			// kill channel if exist bellow
+
+			if err := srv.Shutdown(ctx); err != nil {
+				// Error from closing listeners, or context timeout:
+				log.Printf("HTTP server Shutdown with error: %v", err)
+			}
+			select {
+			case <-time.After(21 * time.Second):
+				log.Println("Not all connections done")
+			case <-ctx.Done():
+
+			}
+		}
+	}()
+
 
 	log.Printf("Server listen to port %d\n", hostPort)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Printf("Error ListenAndServe: %v", err)
 	}
+
+	log.Println("Server exited")
 }
